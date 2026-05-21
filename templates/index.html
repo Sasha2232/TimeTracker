@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Time Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg:       #0d0d0f;
+            --surface:  #141418;
+            --card:     #1c1c22;
+            --border:   #2a2a35;
+            --accent:   #c8f545;
+            --accent2:  #5c5cff;
+            --text:     #e8e8f0;
+            --muted:    #6a6a80;
+            --danger:   #ff4d6d;
+            --mono:     'Space Mono', monospace;
+            --sans:     'Syne', sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--sans);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        /* Layout */
+        .layout {
+            max-width: 960px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 24px;
+        }
+
+        .col-left { display: flex; flex-direction: column; gap: 24px; }
+        .col-right { display: flex; flex-direction: column; gap: 24px; }
+
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            color: var(--text);
+        }
+
+        .header .accent-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 4px;
+        }
+
+        .header .total-badge {
+            font-family: var(--mono);
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-left: auto;
+            background: var(--card);
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        /* Card */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .card-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 16px;
+        }
+
+        /* Add form */
+        .add-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .add-form input {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: var(--sans);
+            font-size: 0.95rem;
+            padding: 10px 14px;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .add-form input:focus { border-color: var(--accent); }
+        .add-form input::placeholder { color: var(--muted); }
+
+        .btn {
+            font-family: var(--sans);
+            font-weight: 600;
+            font-size: 0.85rem;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 18px;
+            cursor: pointer;
+            transition: opacity 0.15s, transform 0.1s;
+        }
+        .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+
+        .btn-primary { background: var(--accent); color: #0d0d0f; }
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.78rem;
+            padding: 6px 12px;
+        }
+        .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-danger { background: transparent; border: 1px solid var(--border); color: var(--danger); font-size: 0.78rem; padding: 6px 12px; }
+        .btn-danger:hover { border-color: var(--danger); }
+
+        /* Task list */
+        .task-list { display: flex; flex-direction: column; gap: 10px; }
+
+        .task-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            transition: border-color 0.2s;
+        }
+        .task-item:hover { border-color: #3a3a50; }
+        .task-item.running { border-color: var(--accent); }
+
+        .task-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--border);
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+        .task-item.running .task-indicator { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+        .task-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            flex: 1;
+        }
+
+        .task-meta {
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        .task-time {
+            font-family: var(--mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .task-actions { display: flex; gap: 6px; }
+
+        .empty-state {
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.9rem;
+            padding: 30px;
+            font-family: var(--mono);
+        }
+
+        /* Chart */
+        .chart-wrap {
+            position: relative;
+            height: 180px;
+        }
+
+        /* Chat */
+        .chat-messages {
+            height: 280px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 14px;
+            padding-right: 4px;
+        }
+
+        .chat-messages::-webkit-scrollbar { width: 4px; }
+        .chat-messages::-webkit-scrollbar-track { background: transparent; }
+        .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        .msg { display: flex; flex-direction: column; max-width: 88%; }
+        .msg.user { align-self: flex-end; align-items: flex-end; }
+        .msg.bot  { align-self: flex-start; align-items: flex-start; }
+
+        .msg-label {
+            font-size: 0.65rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 4px;
+            font-family: var(--mono);
+        }
+
+        .msg-bubble {
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 0.88rem;
+            line-height: 1.5;
+            white-space: pre-line;
+        }
+
+        .msg.user .msg-bubble {
+            background: var(--accent2);
+            color: #fff;
+            border-bottom-right-radius: 2px;
+        }
+
+        .msg.bot .msg-bubble {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-bottom-left-radius: 2px;
+            font-family: var(--mono);
+            font-size: 0.8rem;
+        }
+
+        .chat-input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input-row input {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 0.85rem;
+            padding: 10px 14px;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .chat-input-row input:focus { border-color: var(--accent2); }
+        .chat-input-row input::placeholder { color: var(--muted); }
+
+        .btn-send {
+            background: var(--accent2);
+            color: #fff;
+            font-family: var(--mono);
+            font-size: 0.8rem;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+        .btn-send:hover { opacity: 0.85; }
+    </style>
+</head>
+<body>
+<div class="layout">
+
+    <!-- Header -->
+    <header class="header">
+        <h1>Time Tracker<span class="accent-dot"></span></h1>
+        <span class="total-badge">Total: {{ total }} sec</span>
+    </header>
+
+    <!-- Left column -->
+    <div class="col-left">
+
+        <!-- Add task -->
+        <div class="card">
+            <p class="card-title">New Task</p>
+            <form class="add-form" action="/add" method="post">
+                <input type="text" name="task" placeholder="Task name..." required>
+                <button class="btn btn-primary" type="submit">Add</button>
+            </form>
+        </div>
+
+        <!-- Task list -->
+        <div class="card">
+            <p class="card-title">Tasks</p>
+            <div class="task-list" id="taskList">
+                {% if tasks %}
+                    {% for task in tasks %}
+                    <div class="task-item" id="item{{ task.id }}">
+                        <div class="task-indicator" id="dot{{ task.id }}"></div>
+                        <div class="task-name">{{ task.name }}</div>
+                        <div class="task-meta">{{ task.date }}, {{ task.time_added }}</div>
+                        <div class="task-time" id="time{{ task.id }}">
+                            {{ task.seconds }}s
+                        </div>
+                        <div class="task-actions">
+                            <button class="btn btn-ghost" onclick="startTimer({{ task.id }}, {{ task.seconds }})">Start</button>
+                            <button class="btn btn-ghost" onclick="stopTimer({{ task.id }})">Stop</button>
+                            <a href="/delete/{{ task.id }}">
+                                <button class="btn btn-danger">Del</button>
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">No tasks yet.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="card">
+            <p class="card-title">Weekly Overview</p>
+            <div class="chart-wrap">
+                <canvas id="chart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Right column: Chat -->
+    <div class="col-right">
+        <div class="card" style="flex:1">
+            <p class="card-title">Bot Chat</p>
+            <div class="chat-messages" id="chatMessages">
+                <div class="msg bot">
+                    <span class="msg-label">Bot</span>
+                    <div class="msg-bubble">Hello. Type /помощь to see all commands.</div>
+                </div>
+            </div>
+            <div class="chat-input-row">
+                <input type="text" id="chatInput" placeholder="/помощь" onkeydown="if(event.key==='Enter') sendMessage()">
+                <button class="btn-send" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// Timers
+const timers = {};
+const rawSeconds = {};
+
+function startTimer(id, initial) {
+    if (timers[id]) return;
+    rawSeconds[id] = initial || parseInt(document.getElementById("time" + id).dataset.seconds || 0);
+    document.getElementById("item" + id).classList.add("running");
+    timers[id] = setInterval(() => {
+        rawSeconds[id]++;
+        document.getElementById("time" + id).innerText = fmtTime(rawSeconds[id]);
+    }, 1000);
+}
+
+function stopTimer(id) {
+    if (!timers[id]) return;
+    clearInterval(timers[id]);
+    timers[id] = null;
+    document.getElementById("item" + id).classList.remove("running");
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/update/" + id;
+    const input = document.createElement("input");
+    input.name = "seconds";
+    input.value = rawSeconds[id];
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function fmtTime(s) {
+    if (s < 60) return s + "s";
+    if (s < 3600) return Math.floor(s/60) + "m " + (s%60) + "s";
+    return Math.floor(s/3600) + "h " + Math.floor((s%3600)/60) + "m";
+}
+
+// Set initial display
+document.querySelectorAll("[id^='time']").forEach(el => {
+    const id = el.id.replace("time", "");
+    const sec = parseInt(el.innerText);
+    rawSeconds[id] = sec;
+    el.innerText = fmtTime(sec);
+});
+
+// Chart
+const ctx = document.getElementById("chart").getContext("2d");
+new Chart(ctx, {
+    type: "bar",
+    data: {
+        labels: {{ labels | tojson }},
+        datasets: [{
+            label: "seconds",
+            data: {{ values | tojson }},
+            backgroundColor: "rgba(200, 245, 69, 0.15)",
+            borderColor: "#c8f545",
+            borderWidth: 1,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            x: {
+                ticks: { color: "#6a6a80", font: { family: "Space Mono", size: 10 } },
+                grid: { color: "#1c1c22" }
+            },
+            y: {
+                ticks: { color: "#6a6a80", font: { family: "Space Mono", size: 10 } },
+                grid: { color: "#1c1c22" }
+            }
+        }
+    }
+});
+
+// Chat
+function sendMessage() {
+    const input = document.getElementById("chatInput");
+    const text = input.value.trim();
+    if (!text) return;
+    addMsg("user", text);
+    input.value = "";
+    fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text })
+    })
+    .then(r => r.json())
+    .then(d => addMsg("bot", d.reply))
+    .catch(() => addMsg("bot", "Connection error."));
+}
+
+function addMsg(sender, text) {
+    const box = document.getElementById("chatMessages");
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + sender;
+    const label = document.createElement("span");
+    label.className = "msg-label";
+    label.innerText = sender === "user" ? "You" : "Bot";
+    const bubble = document.createElement("div");
+    bubble.className = "msg-bubble";
+    bubble.innerText = text;
+    wrap.appendChild(label);
+    wrap.appendChild(bubble);
+    box.appendChild(wrap);
+    box.scrollTop = box.scrollHeight;
+}
+</script>
+</body>
+</html>
